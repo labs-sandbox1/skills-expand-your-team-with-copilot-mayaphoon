@@ -547,9 +547,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // Create difficulty badge if difficulty is specified
     const difficultyBadge = details.difficulty ? `
       <span class="difficulty-badge difficulty-${details.difficulty.toLowerCase()}">
-        ${details.difficulty}
       </span>
     ` : '';
+
+    // Set the difficulty text safely after rendering
+    const shouldSetDifficultyText = !!details.difficulty;
 
     // Create capacity indicator
     const capacityIndicator = `
@@ -616,6 +618,14 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       </div>
     `;
+
+    // Safely set difficulty text content to prevent XSS
+    if (shouldSetDifficultyText) {
+      const difficultyBadgeEl = activityCard.querySelector('.difficulty-badge');
+      if (difficultyBadgeEl) {
+        difficultyBadgeEl.textContent = details.difficulty;
+      }
+    }
 
     // Add click handlers for delete buttons
     const deleteButtons = activityCard.querySelectorAll(".delete-participant");
@@ -690,13 +700,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Add event listeners for difficulty filter buttons
   difficultyFilters.forEach((button) => {
     button.addEventListener("click", () => {
-      // Update active class
-      difficultyFilters.forEach((btn) => btn.classList.remove("active"));
-      button.classList.add("active");
-
-      // Update current difficulty filter and fetch activities
-      currentDifficulty = button.dataset.difficulty;
-      fetchActivities();
+      setDifficultyFilter(button.dataset.difficulty);
     });
   });
 
