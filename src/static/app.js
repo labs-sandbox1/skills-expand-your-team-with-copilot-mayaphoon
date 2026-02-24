@@ -545,13 +545,15 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
 
     // Create difficulty badge if difficulty is specified
-    const difficultyBadge = details.difficulty ? `
+    // Validate difficulty value to prevent CSS class injection
+    const validDifficulties = ['Beginner', 'Intermediate', 'Advanced'];
+    const difficultyBadge = details.difficulty && validDifficulties.includes(details.difficulty) ? `
       <span class="difficulty-badge difficulty-${details.difficulty.toLowerCase()}">
       </span>
     ` : '';
 
     // Set the difficulty text safely after rendering
-    const shouldSetDifficultyText = !!details.difficulty;
+    const shouldSetDifficultyText = !!details.difficulty && validDifficulties.includes(details.difficulty);
 
     // Create capacity indicator
     const capacityIndicator = `
