@@ -14,6 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const categoryFilters = document.querySelectorAll(".category-filter");
   const dayFilters = document.querySelectorAll(".day-filter");
   const timeFilters = document.querySelectorAll(".time-filter");
+  const difficultyFilters = document.querySelectorAll(".difficulty-filter");
 
   // Authentication elements
   const loginButton = document.getElementById("login-button");
@@ -40,6 +41,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let searchQuery = "";
   let currentDay = "";
   let currentTimeRange = "";
+  let currentDifficulty = "";
 
   // Authentication state
   let currentUser = null;
@@ -50,6 +52,13 @@ document.addEventListener("DOMContentLoaded", () => {
     afternoon: { start: "15:00", end: "18:00" }, // After school hours
     weekend: { days: ["Saturday", "Sunday"] }, // Weekend days
   };
+
+  // Helper function to escape HTML special characters for safe insertion
+  function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
 
   // Initialize filters from active elements
   function initializeFilters() {
@@ -63,6 +72,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const activeTimeFilter = document.querySelector(".time-filter.active");
     if (activeTimeFilter) {
       currentTimeRange = activeTimeFilter.dataset.time;
+    }
+
+    // Initialize difficulty filter
+    const activeDifficultyFilter = document.querySelector(".difficulty-filter.active");
+    if (activeDifficultyFilter) {
+      currentDifficulty = activeDifficultyFilter.dataset.difficulty;
     }
   }
 
@@ -89,6 +104,22 @@ document.addEventListener("DOMContentLoaded", () => {
     // Update active class
     timeFilters.forEach((btn) => {
       if (btn.dataset.time === timeRange) {
+        btn.classList.add("active");
+      } else {
+        btn.classList.remove("active");
+      }
+    });
+
+    fetchActivities();
+  }
+
+  // Function to set difficulty filter
+  function setDifficultyFilter(difficulty) {
+    currentDifficulty = difficulty;
+
+    // Update active class
+    difficultyFilters.forEach((btn) => {
+      if (btn.dataset.difficulty === difficulty) {
         btn.classList.add("active");
       } else {
         btn.classList.remove("active");
@@ -392,6 +423,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
+      // Handle difficulty filter
+      // Note: "no-level" is handled client-side
+      if (currentDifficulty && currentDifficulty !== "no-level") {
+        queryParams.push(`difficulty=${encodeURIComponent(currentDifficulty)}`);
+      }
+
       const queryString =
         queryParams.length > 0 ? `?${queryParams.join("&")}` : "";
       const response = await fetch(`/activities${queryString}`);
@@ -433,6 +470,14 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
         if (!isWeekendActivity) {
+          return;
+        }
+      }
+
+      // Apply "no-level" difficulty filter (client-side only)
+      if (currentDifficulty === "no-level") {
+        // Only show activities without a difficulty field
+        if (details.difficulty) {
           return;
         }
       }
@@ -506,6 +551,17 @@ document.addEventListener("DOMContentLoaded", () => {
       </span>
     `;
 
+    // Create difficulty badge if difficulty is specified
+    // Validate difficulty value to prevent CSS class injection
+    const validDifficulties = ['Beginner', 'Intermediate', 'Advanced'];
+    const difficultyBadge = details.difficulty && validDifficulties.includes(details.difficulty) ? `
+      <span class="difficulty-badge difficulty-${details.difficulty.toLowerCase()}">
+      </span>
+    ` : '';
+
+    // Set the difficulty text safely after rendering
+    const shouldSetDifficultyText = !!details.difficulty && validDifficulties.includes(details.difficulty);
+
     // Create capacity indicator
     const capacityIndicator = `
       <div class="capacity-container ${capacityStatusClass}">
@@ -521,6 +577,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     activityCard.innerHTML = `
       ${tagHtml}
+      ${difficultyBadge}
       <h4>${name}</h4>
       <p>${details.description}</p>
       <p class="tooltip">
@@ -569,7 +626,30 @@ document.addEventListener("DOMContentLoaded", () => {
         `
         }
       </div>
+      <div class="share-buttons">
+        <span class="share-label">Share:</span>
+        <button class="share-btn share-twitter" data-activity="${escapeHtml(name)}" data-description="${escapeHtml(details.description)}" title="Share on Twitter">
+          𝕏
+        </button>
+        <button class="share-btn share-facebook" data-activity="${escapeHtml(name)}" data-description="${escapeHtml(details.description)}" title="Share on Facebook">
+          f
+        </button>
+        <button class="share-btn share-email" data-activity="${escapeHtml(name)}" data-description="${escapeHtml(details.description)}" title="Share via Email">
+          ✉
+        </button>
+        <button class="share-btn share-copy" data-activity="${escapeHtml(name)}" data-description="${escapeHtml(details.description)}" title="Copy Link">
+          🔗
+        </button>
+      </div>
     `;
+
+    // Safely set difficulty text content to prevent XSS
+    if (shouldSetDifficultyText) {
+      const difficultyBadgeEl = activityCard.querySelector('.difficulty-badge');
+      if (difficultyBadgeEl) {
+        difficultyBadgeEl.textContent = details.difficulty;
+      }
+    }
 
     // Add click handlers for delete buttons
     const deleteButtons = activityCard.querySelectorAll(".delete-participant");
@@ -587,7 +667,96 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
+    // Add click handlers for share buttons
+    activityCard
+      .querySelector(".share-twitter")
+      .addEventListener("click", handleShareTwitter);
+    activityCard
+      .querySelector(".share-facebook")
+      .addEventListener("click", handleShareFacebook);
+    activityCard
+      .querySelector(".share-email")
+      .addEventListener("click", handleShareEmail);
+    activityCard
+      .querySelector(".share-copy")
+      .addEventListener("click", handleShareCopy);
+
     activitiesList.appendChild(activityCard);
+  }
+
+  // Share handler functions
+  function getShareUrl(activityName) {
+    // Create a shareable URL with the activity name
+    const baseUrl = window.location.origin + window.location.pathname;
+    return `${baseUrl}?activity=${encodeURIComponent(activityName)}`;
+  }
+
+  function handleShareTwitter(event) {
+    const activityName = event.currentTarget.dataset.activity;
+    const description = event.currentTarget.dataset.description;
+    const shareUrl = getShareUrl(activityName);
+    const text = `Check out ${activityName} at Mergington High School! ${description}`;
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+      text
+    )}&url=${encodeURIComponent(shareUrl)}`;
+    window.open(twitterUrl, "_blank", "width=550,height=420");
+  }
+
+  function handleShareFacebook(event) {
+    const activityName = event.currentTarget.dataset.activity;
+    const shareUrl = getShareUrl(activityName);
+    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+      shareUrl
+    )}`;
+    window.open(facebookUrl, "_blank", "width=550,height=420");
+  }
+
+  function handleShareEmail(event) {
+    const activityName = event.currentTarget.dataset.activity;
+    const description = event.currentTarget.dataset.description;
+    const shareUrl = getShareUrl(activityName);
+    const subject = `Check out ${activityName} at Mergington High School!`;
+    const body = `I wanted to share this activity with you:\n\n${activityName}\n${description}\n\nLearn more: ${shareUrl}`;
+    const mailtoUrl = `mailto:?subject=${encodeURIComponent(
+      subject
+    )}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailtoUrl;
+  }
+
+  function handleShareCopy(event) {
+    const activityName = event.currentTarget.dataset.activity;
+    const shareUrl = getShareUrl(activityName);
+
+    // Feature detection for Clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard
+        .writeText(shareUrl)
+        .then(() => {
+          showMessage(`Link copied for ${activityName}!`, "success");
+        })
+        .catch(() => {
+          fallbackCopyToClipboard(shareUrl, activityName);
+        });
+    } else {
+      fallbackCopyToClipboard(shareUrl, activityName);
+    }
+  }
+
+  // Fallback copy method for browsers without Clipboard API support
+  function fallbackCopyToClipboard(text, activityName) {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.left = "-9999px";
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+      document.execCommand("copy");
+      showMessage(`Link copied for ${activityName}!`, "success");
+    } catch (err) {
+      showMessage("Failed to copy link. Please try again.", "error");
+    }
+    document.body.removeChild(textArea);
   }
 
   // Event listeners for search and filter
@@ -638,6 +807,13 @@ document.addEventListener("DOMContentLoaded", () => {
       // Update current time filter and fetch activities
       currentTimeRange = button.dataset.time;
       fetchActivities();
+    });
+  });
+
+  // Add event listeners for difficulty filter buttons
+  difficultyFilters.forEach((button) => {
+    button.addEventListener("click", () => {
+      setDifficultyFilter(button.dataset.difficulty);
     });
   });
 
@@ -859,10 +1035,33 @@ document.addEventListener("DOMContentLoaded", () => {
   window.activityFilters = {
     setDayFilter,
     setTimeRangeFilter,
+    setDifficultyFilter,
   };
+
+  // Handle shared activity URL parameter
+  function handleSharedActivityParam() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedActivity = urlParams.get("activity");
+    if (sharedActivity) {
+      // Wait for activities to load, then highlight and scroll to the shared activity
+      setTimeout(() => {
+        const activityCards = document.querySelectorAll(".activity-card");
+        for (const card of activityCards) {
+          const title = card.querySelector("h4");
+          if (title && title.textContent === sharedActivity) {
+            card.style.boxShadow = "0 0 10px 3px var(--secondary)";
+            card.scrollIntoView({ behavior: "smooth", block: "center" });
+            showMessage(`Viewing shared activity: ${sharedActivity}`, "info");
+            break;
+          }
+        }
+      }, 500);
+    }
+  }
 
   // Initialize app
   checkAuthentication();
   initializeFilters();
   fetchActivities();
+  handleSharedActivityParam();
 });
