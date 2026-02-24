@@ -51,6 +51,13 @@ document.addEventListener("DOMContentLoaded", () => {
     weekend: { days: ["Saturday", "Sunday"] }, // Weekend days
   };
 
+  // Helper function to escape HTML special characters for safe insertion
+  function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
   // Initialize filters from active elements
   function initializeFilters() {
     // Initialize day filter
@@ -571,16 +578,16 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
       <div class="share-buttons">
         <span class="share-label">Share:</span>
-        <button class="share-btn share-twitter" data-activity="${name}" data-description="${details.description}" title="Share on Twitter">
+        <button class="share-btn share-twitter" data-activity="${escapeHtml(name)}" data-description="${escapeHtml(details.description)}" title="Share on Twitter">
           𝕏
         </button>
-        <button class="share-btn share-facebook" data-activity="${name}" data-description="${details.description}" title="Share on Facebook">
+        <button class="share-btn share-facebook" data-activity="${escapeHtml(name)}" data-description="${escapeHtml(details.description)}" title="Share on Facebook">
           f
         </button>
-        <button class="share-btn share-email" data-activity="${name}" data-description="${details.description}" title="Share via Email">
+        <button class="share-btn share-email" data-activity="${escapeHtml(name)}" data-description="${escapeHtml(details.description)}" title="Share via Email">
           ✉
         </button>
-        <button class="share-btn share-copy" data-activity="${name}" data-description="${details.description}" title="Copy Link">
+        <button class="share-btn share-copy" data-activity="${escapeHtml(name)}" data-description="${escapeHtml(details.description)}" title="Copy Link">
           🔗
         </button>
       </div>
@@ -661,14 +668,37 @@ document.addEventListener("DOMContentLoaded", () => {
   function handleShareCopy(event) {
     const activityName = event.currentTarget.dataset.activity;
     const shareUrl = getShareUrl(activityName);
-    navigator.clipboard
-      .writeText(shareUrl)
-      .then(() => {
-        showMessage(`Link copied for ${activityName}!`, "success");
-      })
-      .catch(() => {
-        showMessage("Failed to copy link. Please try again.", "error");
-      });
+
+    // Feature detection for Clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard
+        .writeText(shareUrl)
+        .then(() => {
+          showMessage(`Link copied for ${activityName}!`, "success");
+        })
+        .catch(() => {
+          fallbackCopyToClipboard(shareUrl, activityName);
+        });
+    } else {
+      fallbackCopyToClipboard(shareUrl, activityName);
+    }
+  }
+
+  // Fallback copy method for browsers without Clipboard API support
+  function fallbackCopyToClipboard(text, activityName) {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.left = "-9999px";
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+      document.execCommand("copy");
+      showMessage(`Link copied for ${activityName}!`, "success");
+    } catch (err) {
+      showMessage("Failed to copy link. Please try again.", "error");
+    }
+    document.body.removeChild(textArea);
   }
 
   // Event listeners for search and filter
@@ -942,8 +972,30 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeRangeFilter,
   };
 
+  // Handle shared activity URL parameter
+  function handleSharedActivityParam() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedActivity = urlParams.get("activity");
+    if (sharedActivity) {
+      // Wait for activities to load, then highlight and scroll to the shared activity
+      setTimeout(() => {
+        const activityCards = document.querySelectorAll(".activity-card");
+        for (const card of activityCards) {
+          const title = card.querySelector("h4");
+          if (title && title.textContent === sharedActivity) {
+            card.style.boxShadow = "0 0 10px 3px var(--secondary)";
+            card.scrollIntoView({ behavior: "smooth", block: "center" });
+            showMessage(`Viewing shared activity: ${sharedActivity}`, "info");
+            break;
+          }
+        }
+      }, 500);
+    }
+  }
+
   // Initialize app
   checkAuthentication();
   initializeFilters();
   fetchActivities();
+  handleSharedActivityParam();
 });
